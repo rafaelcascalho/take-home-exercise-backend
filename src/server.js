@@ -1,6 +1,6 @@
-import express from "express";
-import { ApolloServer, gql } from "apollo-server-express";
-import { models } from "./db";
+import express from 'express';
+import { ApolloServer, gql } from 'apollo-server-express';
+import { models } from './db';
 
 const PORT = 4001;
 
@@ -45,30 +45,102 @@ const typeDefs = gql`
 `;
 
 /**
- * TODO: Your task is implementing the resolvers. Go through the README first.
- * TODO: Your resolvers below will need to implement the typedefs given above.
+ * TODO: implement search before operations in tickets (think about it first)
  */
 
 const resolvers = {
   Query: {
-    /**
-     * We have implemented this first query for you to set up an initial pattern.
-     */
+    ticket: async (root, args, context) => {
+      return models.Ticket.findByPk(args.id);
+    },
+
     tickets: async (root, args, context) => {
-      return models.Ticket.findAll({
-        where: {
-          parentId: null
-        }
-      });
-    }
+      return models.Ticket.findAll({ where: { parentId: null } });
+    },
   },
-  Ticket: {},
-  Mutation: {}
+
+  Ticket: {
+    children: async (root, args, context) => {
+      return await models.Ticket.findAll({
+        where: { parentId: root.dataValues.id },
+      });
+    },
+  },
+
+  Mutation: {
+    createTicket: async (root, args, context) => {
+      return models.Ticket.create(args);
+    },
+
+    updateTicket: async (root, args, context) => {
+      let ticket = await models.Ticket.findByPk(args.id);
+
+      ticket.title = args.title;
+
+      await ticket.save();
+
+      return ticket;
+    },
+
+    toggleTicket: async (root, args, context) => {
+      let ticket = await models.Ticket.findByPk(args.id);
+
+      ticket.isCompleted = args.isCompleted;
+
+      await ticket.save();
+
+      return ticket;
+    },
+
+    removeTicket: async (root, args, context) => {
+      let ticket = await models.Ticket.findByPk(args.id);
+
+      if (!ticket) {
+        return false;
+      }
+
+      await ticket.destroy();
+
+      return true;
+    },
+
+    addChildrenToTicket: async (root, args, context) => {
+      args.childrenIds.map(async (id) => {
+        await models.Ticket.update(
+          { parentId: args.parentId },
+          { where: { id } }
+        );
+      });
+
+      let parent = await models.Ticket.findByPk(args.parentId);
+      return parent;
+    },
+
+    setParentOfTicket: async (root, args, context) => {
+      let ticket = await models.Ticket.findByPk(args.childId);
+
+      ticket.parentId = args.parentId;
+
+      await ticket.save();
+
+      return ticket;
+    },
+
+    removeParentFromTicket: async (root, args, context) => {
+      let ticket = await models.Ticket.findByPk(args.id);
+
+      ticket.parentId = null;
+
+      await ticket.save();
+
+      return ticket;
+    },
+  },
 };
 
 const server = new ApolloServer({
   typeDefs,
-  resolvers
+  resolvers,
 });
 
 const app = express();
